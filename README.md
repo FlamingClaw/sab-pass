@@ -30,7 +30,13 @@ It only starts when you run it, or when Delta's **autoexecute** runs it (put the
 
 ## Window
 
-RUN / STOPPED, HELP on/off, LOW GFX (for running many accounts: other players' bases and stacks are not drawn, though they're still there so helping works; sparkles, shadows and post effects go off; 20 fps cap; the screen stays normal). The `_` button shrinks it. It shows the rank, acorns, today's quests and the last thing it did.
+RUN / STOPPED, HELP on/off, and the **GFX** switch for running many accounts (tap to cycle, the screen always stays normal):
+
+- **GFX: NORMAL**: everything drawn.
+- **GFX: LOW**: other players' bases, stacks and butters aren't drawn (they're still there, so helping works); sparkles, shadows and post effects off; 20 fps cap.
+- **GFX: LOWEST**: the same, plus your own base and stack tower aren't drawn either. Buying, waxing and collecting still work.
+
+The `_` button shrinks the window. It shows the rank, acorns, today's quests and the last thing it did.
 
 ## Tips for alts
 

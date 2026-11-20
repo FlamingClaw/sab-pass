@@ -8,7 +8,7 @@ One job: take a fresh or new-ish account to the last rank of the event pass, on 
 Measured on a fresh account, Nov 20 2026: 20 ranks / 4300 acorns, 5 quests a day + 100 bonus after 4,
 a full day is 520-730 acorns, quests reset at 00:00 UTC, the event ends Dec 1 00:00 UTC.
 ]]
-local VERSION = "pass v1.1"
+local VERSION = "pass v1.2"
 local genv = (getgenv and getgenv()) or _G
 if genv.SABP and genv.SABP.kill then pcall(genv.SABP.kill) end
 
@@ -19,7 +19,7 @@ local UIS = game:GetService("UserInputService")
 local RunS = game:GetService("RunService")
 local plr = Players.LocalPlayer
 local P = { alive = true, conns = {}, log = {}, logN = 0 } -- state
-local CFG = { Run = true, Help = true, ClaimRanks = true, LowGfx = false, FpsCap = 20, StopRank = 19, Job = "" }
+local CFG = { Run = true, Help = true, ClaimRanks = true, LowGfx = false, HideMine = false, FpsCap = 20, StopRank = 19, Job = "" }
 local FILE = "SAB/SAB_Pass_" .. tostring(plr.UserId) .. ".txt" -- one settings file per account
 
 ---------------------------------------------------------------- basics
@@ -466,7 +466,7 @@ mk("UICorner", { CornerRadius = UDim.new(0, 5) }, hideB)
 local rankL = lbl(W, 26, 30, 11, C.on, true)
 local questL = lbl(W, 56, 70, 10, C.text, false)
 local statL = lbl(W, 126, 28, 9, C.dim, false)
-local runB, helpB, gfxB = btn("RUN", 0, 1 / 3, 156), btn("HELP", 1 / 3, 1 / 3, 156), btn("LOW GFX", 2 / 3, 1 / 3, 156)
+local runB, helpB, gfxB = btn("RUN", 0, 1 / 3, 156), btn("HELP", 1 / 3, 1 / 3, 156), btn("GFX: NORMAL", 2 / 3, 1 / 3, 156)
 local logL = lbl(W, 182, 30, 9, C.dim, false)
 logL.TextTruncate = Enum.TextTruncate.AtEnd
 -- drag by the title area
@@ -498,7 +498,7 @@ local function save()
     if not writefile then return end
     pcall(function()
         if makefolder and isfolder and not isfolder("SAB") then makefolder("SAB") end
-        writefile(FILE, ("Run=%s\nHelp=%s\nLowGfx=%s\nJob=%s\n"):format(tostring(CFG.Run), tostring(CFG.Help), tostring(CFG.LowGfx), CFG.Job))
+        writefile(FILE, ("Run=%s\nHelp=%s\nLowGfx=%s\nHideMine=%s\nJob=%s\n"):format(tostring(CFG.Run), tostring(CFG.Help), tostring(CFG.LowGfx), tostring(CFG.HideMine), CFG.Job))
     end)
 end
 pcall(function()
@@ -508,10 +508,14 @@ pcall(function()
         end
     end
 end)
--- LOW GFX: the screen stays normal. Other players' bases, stacks and butters are made see-through on
--- this screen only (see-through parts are not drawn, nothing is removed, so helping still works);
+-- GFX: NORMAL -> LOW -> LOWEST. The screen stays normal. LOW makes other players' bases, stacks and butters
+-- see-through on this screen only, LOWEST your own base and stack tower too (see-through parts are not
+-- drawn, nothing is removed, so helping, buying, waxing and collecting all still work);
 -- floating labels, sparkles, shadows and post effects go off; a frame cap keeps the phone cool.
-local GFX = { unseen = setmetatable({}, { __mode = "k" }) }
+local GFX = { unseen = setmetatable({}, { __mode = "k" }), NAMES = { [0] = "GFX: NORMAL", "GFX: LOW", "GFX: LOWEST" } }
+function GFX.scope(d, plots, mine) -- is d part of a base this mode hides?
+    return plots and d:IsDescendantOf(plots) and (CFG.HideMine or not (mine and d:IsDescendantOf(mine)))
+end
 function GFX.hide(d)
     if d:IsA("BasePart") or d:IsA("Decal") or d:IsA("Texture") then
         if d.Transparency < 1 then GFX.unseen[d] = d.Transparency d.Transparency = 1 end
@@ -535,7 +539,7 @@ local function lowGfx(on)
             local n = 0
             for _, d in ipairs(WS:GetDescendants()) do
                 if not CFG.LowGfx then return end
-                if plots and d:IsDescendantOf(plots) and not (mine and d:IsDescendantOf(mine)) then pcall(GFX.hide, d) else pcall(GFX.fx, d) end
+                if GFX.scope(d, plots, mine) then pcall(GFX.hide, d) else pcall(GFX.fx, d) end
                 n = n + 1
                 if n % 600 == 0 then task.wait() end
             end
@@ -545,7 +549,7 @@ local function lowGfx(on)
                 if not CFG.LowGfx then return end
                 task.defer(function()
                     local p, m = WS:FindFirstChild("Plots"), plot()
-                    if p and d:IsDescendantOf(p) and not (m and d:IsDescendantOf(m)) then pcall(GFX.hide, d) else pcall(GFX.fx, d) end
+                    if GFX.scope(d, p, m) then pcall(GFX.hide, d) else pcall(GFX.fx, d) end
                 end)
             end))
         end
@@ -566,15 +570,23 @@ local function lowGfx(on)
     local f = (type(setfpscap) == "function" and setfpscap) or nil
     if f then pcall(f, on and CFG.FpsCap or 60) end
 end
+function GFX.mode() return CFG.LowGfx and (CFG.HideMine and 2 or 1) or 0 end
+function GFX.set(m) -- 0 normal, 1 others hidden, 2 everything hidden (yours too)
+    if CFG.LowGfx then lowGfx(false) end -- put everything back, then hide the new set
+    CFG.HideMine = m == 2
+    if m > 0 then lowGfx(true) end
+end
 local function paint()
     runB.BackgroundColor3 = CFG.Run and C.good or C.off
     runB.Text = CFG.Run and "RUNNING" or "STOPPED"
     helpB.BackgroundColor3 = CFG.Help and C.on or C.off
     gfxB.BackgroundColor3 = CFG.LowGfx and C.on or C.off
+    gfxB.Text = GFX.NAMES[GFX.mode()]
 end
 runB.MouseButton1Click:Connect(function() CFG.Run = not CFG.Run paint() save() end)
 helpB.MouseButton1Click:Connect(function() CFG.Help = not CFG.Help paint() save() end)
-gfxB.MouseButton1Click:Connect(function() lowGfx(not CFG.LowGfx) paint() save() end)
+gfxB.MouseButton1Click:Connect(function() GFX.set((GFX.mode() + 1) % 3) paint() save() end)
+gfxB.TextSize = 9
 paint()
 if CFG.LowGfx then lowGfx(true) end
 
@@ -638,7 +650,7 @@ function P.kill()
     for _, c in ipairs(P.conns) do pcall(function() c:Disconnect() end) end
     pcall(function() sg:Destroy() end)
 end
-genv.SABP = { P = P, CFG = CFG, PASS = PASS, HX = HX, kill = P.kill, step = step, VERSION = VERSION,
+genv.SABP = { P = P, CFG = CFG, PASS = PASS, HX = HX, kill = P.kill, step = step, VERSION = VERSION, GFX = GFX,
     pin = function() CFG.Job = game.JobId save() note("this server is now the one to rejoin") end }
 note(VERSION .. " loaded")
 task.spawn(function() -- the pass: read it, claim what is done, every 20 s
