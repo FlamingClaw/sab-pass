@@ -8,7 +8,7 @@ One job: take an account (a brand-new one is fine) to the last rank of the event
 loadstring(game:HttpGet("https://raw.githubusercontent.com/FlamingClaw/sab-pass/main/SAB_Pass.lua?t=" .. tick()))()
 ```
 
-Put the same line in Delta's **autoexecute** folder so it starts by itself after every rejoin.
+It only starts when you run it, or when Delta's **autoexecute** runs it (put the same line in the autoexecute folder for that). It never queues itself for the next server. Each account keeps its own settings (`SAB/SAB_Pass_<userId>.txt`).
 
 ## What it does
 
@@ -19,7 +19,7 @@ Put the same line in Delta's **autoexecute** folder so it starts by itself after
 - **Helps other players' waxes** for the help quests: it stands inside their butter so the help counts.
 - **Claims** finished quests, the daily bonus, and pass ranks **1 to 19 on the free side**.
 - **Never** claims the last rank (the 90%-of-best butter), never uses Claim All, never buys anything with Robux.
-- **Stays in**: anti-idle, rejoins when disconnected (to a pinned server if you set one), and restarts itself after a teleport.
+- **Stays in**: anti-idle, and rejoins when disconnected (to a pinned server if you set one). After a rejoin it starts again only if autoexecute is on.
 
 ## The pass (Thanksgiving, measured Nov 20 2026)
 
@@ -30,7 +30,7 @@ Put the same line in Delta's **autoexecute** folder so it starts by itself after
 
 ## Window
 
-RUN / STOPPED, HELP on/off, LOW GFX (3D rendering off and a 20 fps cap, for running many accounts). The `_` button shrinks it. It shows the rank, acorns, today's quests and the last thing it did.
+RUN / STOPPED, HELP on/off, LOW GFX (for running many accounts: other players' bases and stacks are not drawn, though they're still there so helping works; sparkles, shadows and post effects go off; 20 fps cap; the screen stays normal). The `_` button shrinks it. It shows the rank, acorns, today's quests and the last thing it did.
 
 ## Tips for alts
 

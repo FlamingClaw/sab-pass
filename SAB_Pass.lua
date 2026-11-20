@@ -8,7 +8,7 @@ One job: take a fresh or new-ish account to the last rank of the event pass, on 
 Measured on a fresh account, Nov 20 2026: 20 ranks / 4300 acorns, 5 quests a day + 100 bonus after 4,
 a full day is 520-730 acorns, quests reset at 00:00 UTC, the event ends Dec 1 00:00 UTC.
 ]]
-local VERSION = "pass v1.0"
+local VERSION = "pass v1.1"
 local genv = (getgenv and getgenv()) or _G
 if genv.SABP and genv.SABP.kill then pcall(genv.SABP.kill) end
 
@@ -20,8 +20,7 @@ local RunS = game:GetService("RunService")
 local plr = Players.LocalPlayer
 local P = { alive = true, conns = {}, log = {}, logN = 0 } -- state
 local CFG = { Run = true, Help = true, ClaimRanks = true, LowGfx = false, FpsCap = 20, StopRank = 19, Job = "" }
-local FILE = "SAB/SAB_Pass_config.txt"
-local LOADER = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/FlamingClaw/sab-pass/main/SAB_Pass.lua?t=" .. tick()))()'
+local FILE = "SAB/SAB_Pass_" .. tostring(plr.UserId) .. ".txt" -- one settings file per account
 
 ---------------------------------------------------------------- basics
 local function now() return os.clock() end
@@ -509,9 +508,61 @@ pcall(function()
         end
     end
 end)
+-- LOW GFX: the screen stays normal. Other players' bases, stacks and butters are made see-through on
+-- this screen only (see-through parts are not drawn, nothing is removed, so helping still works);
+-- floating labels, sparkles, shadows and post effects go off; a frame cap keeps the phone cool.
+local GFX = { unseen = setmetatable({}, { __mode = "k" }) }
+function GFX.hide(d)
+    if d:IsA("BasePart") or d:IsA("Decal") or d:IsA("Texture") then
+        if d.Transparency < 1 then GFX.unseen[d] = d.Transparency d.Transparency = 1 end
+    elseif d:IsA("BillboardGui") or d:IsA("SurfaceGui") or d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail")
+        or d:IsA("Light") or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles") then
+        if d.Enabled then GFX.unseen[d] = true d.Enabled = false end
+    end
+end
+function GFX.fx(d) -- effects anywhere (yours included): only the costly, purely visual ones
+    if d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail") or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles") then
+        if d.Enabled then GFX.unseen[d] = true d.Enabled = false end
+    end
+end
 local function lowGfx(on)
     CFG.LowGfx = on
-    pcall(function() RunS:Set3dRenderingEnabled(not on) end)
+    pcall(function() RunS:Set3dRenderingEnabled(true) end) -- (older versions blanked the screen)
+    local plots, mine = WS:FindFirstChild("Plots"), plot()
+    local L = game:GetService("Lighting")
+    if on then
+        task.spawn(function()
+            local n = 0
+            for _, d in ipairs(WS:GetDescendants()) do
+                if not CFG.LowGfx then return end
+                if plots and d:IsDescendantOf(plots) and not (mine and d:IsDescendantOf(mine)) then pcall(GFX.hide, d) else pcall(GFX.fx, d) end
+                n = n + 1
+                if n % 600 == 0 then task.wait() end
+            end
+        end)
+        if not GFX.conn then
+            GFX.conn = track(WS.DescendantAdded:Connect(function(d)
+                if not CFG.LowGfx then return end
+                task.defer(function()
+                    local p, m = WS:FindFirstChild("Plots"), plot()
+                    if p and d:IsDescendantOf(p) and not (m and d:IsDescendantOf(m)) then pcall(GFX.hide, d) else pcall(GFX.fx, d) end
+                end)
+            end))
+        end
+        pcall(function() GFX.shadows = GFX.shadows == nil and L.GlobalShadows or GFX.shadows L.GlobalShadows = false end)
+        for _, e in ipairs(L:GetChildren()) do
+            if e:IsA("PostEffect") and e.Enabled then GFX.unseen[e] = true e.Enabled = false end
+        end
+    else
+        for d, v in pairs(GFX.unseen) do
+            pcall(function()
+                if not d.Parent then return end
+                if type(v) == "number" then d.Transparency = v else d.Enabled = true end
+            end)
+        end
+        GFX.unseen = setmetatable({}, { __mode = "k" })
+        if GFX.shadows ~= nil then pcall(function() L.GlobalShadows = GFX.shadows end) GFX.shadows = nil end
+    end
     local f = (type(setfpscap) == "function" and setfpscap) or nil
     if f then pcall(f, on and CFG.FpsCap or 60) end
 end
@@ -550,8 +601,8 @@ local function refresh()
 end
 
 ---------------------------------------------------------------- staying in the game
--- anti-idle, a rejoin (to the same server if one was pinned) when the game drops us, and the
--- loader queued so it starts again after any teleport
+-- anti-idle, and a rejoin (to the pinned server if there is one) when the game drops us. It does NOT
+-- queue itself for the next server: it only starts when you run it or Delta's autoexecute does.
 track(plr.Idled:Connect(function()
     pcall(function()
         local vu = game:GetService("VirtualUser")
@@ -559,16 +610,10 @@ track(plr.Idled:Connect(function()
         vu:ClickButton2(Vector2.new())
     end)
 end))
-local function queueSelf()
-    local q = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
-    if q then pcall(q, LOADER) end
-end
-queueSelf()
 local function rejoin(why)
     if P.rejoining then return end
     P.rejoining = true
     note("REJOIN: " .. tostring(why))
-    queueSelf()
     local TS = game:GetService("TeleportService")
     local ok = false
     if CFG.Job ~= "" then ok = pcall(function() TS:TeleportToPlaceInstance(game.PlaceId, CFG.Job, plr) end) end
@@ -589,9 +634,9 @@ end)
 ---------------------------------------------------------------- run
 function P.kill()
     P.alive = false
+    if CFG.LowGfx then pcall(lowGfx, false) CFG.LowGfx = true end -- back to normal, the saved choice kept
     for _, c in ipairs(P.conns) do pcall(function() c:Disconnect() end) end
     pcall(function() sg:Destroy() end)
-    pcall(function() RunS:Set3dRenderingEnabled(true) end)
 end
 genv.SABP = { P = P, CFG = CFG, PASS = PASS, HX = HX, kill = P.kill, step = step, VERSION = VERSION,
     pin = function() CFG.Job = game.JobId save() note("this server is now the one to rejoin") end }
